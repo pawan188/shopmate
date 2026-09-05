@@ -1,0 +1,167 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ShopMate</title>
+<style>
+  :root {
+    --bg: #0b0b0d; --panel: #131316; --panel-2: #1a1a1f;
+    --line: rgba(255,255,255,.08); --line-strong: rgba(255,255,255,.16);
+    --text: #f4f4f2; --text-2: #c9c9c4; --muted: #82828a; --faint: #5b5b63;
+    --accent: #d97757; --green: #4ade80; --amber: #fbbf24; --red: #f87171;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; border-radius: 0 !important; }
+  html, body { height: 100%; }
+  body {
+    font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+    background: var(--bg); color: var(--text); font-size: 15px; line-height: 1.65;
+    display: flex; justify-content: center;
+  }
+  .app { width: 100%; max-width: 780px; padding: 0 28px 28px; display: flex; flex-direction: column; min-height: 100%; }
+  header { display: flex; align-items: center; gap: 12px; padding: 18px 0 14px; }
+  .wordmark { font-size: 17px; font-weight: 650; }
+  .wordmark .dot { color: var(--accent); }
+  .badge { font-size: 10.5px; font-weight: 600; letter-spacing: .8px; text-transform: uppercase; padding: 3px 9px; border: 1px solid var(--line-strong); color: var(--text-2); }
+  .badge.live { color: var(--green); border-color: rgba(74,222,128,.4); }
+  .badge.cart-pill { color: var(--amber); border-color: rgba(251,191,36,.4); cursor: pointer; }
+  .spacer { flex: 1; }
+  .status { font-size: 12px; color: var(--muted); }
+  .chat { flex: 1; padding: 14px 0; overflow-y: auto; }
+  .turn { margin-bottom: 26px; }
+  .user .who { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+  .user .text { color: var(--text-2); border-left: 2px solid var(--accent); padding: 2px 0 2px 16px; }
+  .assistant .who { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+  .assistant .body { white-space: pre-wrap; color: var(--text); }
+  .assistant .body a { color: var(--accent); }
+  .tag { display: inline-block; font-size: 10.5px; font-weight: 600; letter-spacing: .5px; text-transform: uppercase; padding: 2px 7px; border: 1px solid; margin-bottom: 8px; }
+  .tag.green { color: var(--green); border-color: rgba(74,222,128,.4); }
+  .tag.amber { color: var(--amber); border-color: rgba(251,191,36,.4); }
+  .tag.red { color: var(--red); border-color: rgba(248,113,113,.4); }
+  .composer { display: flex; border: 1px solid var(--line-strong); background: var(--panel); }
+  .composer:focus-within { border-color: var(--accent); }
+  .composer input { flex: 1; background: transparent; border: none; outline: none; color: var(--text); font-size: 14.5px; font-family: inherit; padding: 13px 16px; }
+  .composer input::placeholder { color: var(--faint); }
+  .send { background: var(--accent); color: #1c0f0a; border: none; font-weight: 700; padding: 0 20px; cursor: pointer; font-family: inherit; }
+  .send:disabled { opacity: .5; cursor: default; }
+  .foot { font-size: 12px; color: var(--faint); text-align: center; margin-top: 12px; }
+  .typing { color: var(--muted); font-size: 13px; }
+  @keyframes blink { 50% { opacity: .3; } }
+  .typing span { animation: blink 1s infinite; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="wordmark">ShopMate<span class="dot">.</span></div>
+    <span class="badge live">live backend</span>
+    <span class="badge cart-pill" id="cartPill" title="View cart">cart · 0</span>
+    <div class="spacer"></div>
+    <div class="status" id="status">connecting...</div>
+  </header>
+  <div class="chat" id="chat"></div>
+  <div class="composer">
+    <input id="msg" placeholder="Message ShopMate..." autocomplete="off">
+    <button class="send" id="send">Send</button>
+  </div>
+  <div class="foot">Grounded shopping agent - prices &amp; stock always come from the live catalog. Payments run in Razorpay TEST mode.</div>
+</div>
+
+<script>
+  const chat = document.getElementById("chat");
+  const input = document.getElementById("msg");
+  const sendBtn = document.getElementById("send");
+  const statusEl = document.getElementById("status");
+  const cartPill = document.getElementById("cartPill");
+  let sessionId = localStorage.getItem("shopmate_sid") || "";
+
+  function el(tag, cls, html) {
+    const n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (html !== undefined) n.innerHTML = html;
+    return n;
+  }
+  function escapeHtml(s) {
+    return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+  function linkify(s) {
+    return escapeHtml(s).replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
+  }
+  function scroll() { chat.scrollTop = chat.scrollHeight; }
+
+  function updateCart(cart) {
+    if (!cart) return;
+    const total = (cart.total_inr || 0).toLocaleString("en-IN");
+    cartPill.textContent = "cart · " + cart.count + " · ₹" + total;
+    cartPill.style.cursor = cart.count > 0 ? "pointer" : "default";
+  }
+
+  function addUser(text) {
+    const t = el("div", "turn user");
+    t.appendChild(el("div", "who", "You"));
+    t.appendChild(el("div", "text", escapeHtml(text)));
+    chat.appendChild(t); scroll();
+  }
+  function addAssistant(bodyHtml, tagCls, tagText) {
+    const t = el("div", "turn assistant");
+    t.appendChild(el("div", "who", "ShopMate"));
+    if (tagText) t.appendChild(el("span", "tag " + tagCls, tagText));
+    const body = el("div", "body", bodyHtml);
+    t.appendChild(body);
+    chat.appendChild(t); scroll();
+  }
+
+  async function send() {
+    const message = input.value.trim();
+    if (!message || sendBtn.disabled) return;
+    input.value = "";
+    sendBtn.disabled = true;
+    addUser(message);
+    const typing = el("div", "turn assistant");
+    typing.appendChild(el("div", "who", "ShopMate"));
+    typing.appendChild(el("div", "typing", "thinking<span>.</span><span>.</span><span>.</span>"));
+    chat.appendChild(typing); scroll();
+
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message, session_id: sessionId || null }),
+      });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const data = await res.json();
+      sessionId = data.session_id;
+      localStorage.setItem("shopmate_sid", sessionId);
+      updateCart(data.cart);
+
+      let tag = null;
+      if (data.checkout) tag = ["green", "&#10003; payment link created (TEST)"];
+      else if (data.guard && data.guard.reason && data.guard.reason.startsWith("low_confidence"))
+        tag = ["amber", "clarify guard - low confidence"];
+      typing.remove();
+      addAssistant(linkify(data.reply || ""), tag && tag[0], tag && tag[1]);
+    } catch (err) {
+      typing.remove();
+      addAssistant(escapeHtml("Something went wrong talking to the backend: " + err.message), "red", "error");
+    } finally {
+      sendBtn.disabled = false;
+      input.focus();
+    }
+  }
+
+  sendBtn.addEventListener("click", send);
+  cartPill.addEventListener("click", () => {
+    input.value = "what's in my cart";
+    send();
+  });
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter") send(); });
+
+  fetch("/health").then((r) => r.json()).then((d) => {
+    statusEl.textContent = "backend ok · " + d.active_sessions + " active session(s)";
+  }).catch(() => { statusEl.textContent = "backend offline"; });
+
+  addAssistant("Hi, I'm <b>ShopMate</b>. Ask me for products in plain language - I only state prices and stock I've just fetched from the catalog. Say something like <i>'wireless noise cancelling headphones'</i>, then <i>'buy it'</i> to get a TEST payment link.");
+  input.focus();
+</script>
+</body>
+</html>

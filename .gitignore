@@ -1,0 +1,26 @@
+# Secrets - never commit
+backend/.env
+*.env
+!backend/.env.example
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Chroma vector store (rebuilt from catalog, idempotent)
+backend/chroma_db/
+
+# Audit log
+backend/audit_log/
+
+# Tests and extras
+backend/tests/
+extras/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
