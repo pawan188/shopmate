@@ -108,20 +108,6 @@ To pay in TEST mode: open the payment link and choose **Netbanking → any bank*
   `guard` shows clarify-guard decisions; `checkout` carries payment-link or status-check details; `cart` is the session cart snapshot.
 - `GET /api/logs?session_id=...&limit=50` → recent audit entries.
 
-## Tests
-
-Verification scripts live in `backend/tests/` (run from `backend/` with `..\.venv\Scripts\python.exe tests\verify_stepX.py`). Highlights:
-
-- `verify_step5.py` — validator: exact match ALLOW; tampered price / unretrieved id / no-search BLOCK (offline).
-- `verify_step6.py` — low-confidence queries end in a clarifying question, never a guess.
-- `verify_step7.py` — TEST payment-link creation behind the validator gate (needs Razorpay test keys).
-- `verify_step8.py` — append-only audit trail captures every stage.
-
-## Demo & docs
-
-- `DEMO_SCRIPTS.md` — 3 rehearsed demo scripts (happy path, clarify guard, tamper + decline) with expected outputs and judge talking points.
-- `VIDEO_SCRIPT.md` — timed 5-minute video narration script.
-- `HANDOVER.md` — full build log (each layer's what/why/verification).
 
 ## Limitations & honest notes
 
